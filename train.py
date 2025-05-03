@@ -200,11 +200,19 @@ if opts.reload:
 #
 singletons = set([word_to_id[k] for k, v
                   in dico_words_train.items() if v == 1])
-n_epochs = 20  # number of epochs over the training set
+n_epochs = 50  # number of epochs over the training set
 freq_eval = 1000  # evaluate on dev every freq_eval steps
 best_dev = -np.inf
 best_test = -np.inf
 count = 0
+
+patience = 5 # parameters for early stopping
+patience_counter = 0
+train_losses = []
+train_f1s = []
+dev_f1s = []
+best_dev = -np.inf
+
 for epoch in xrange(n_epochs):
     epoch_costs = []
     print "Starting epoch %i..." % epoch
@@ -213,21 +221,39 @@ for epoch in xrange(n_epochs):
         input = create_input(train_data[index], parameters, True, singletons)
         new_cost = f_train(*input)
         epoch_costs.append(new_cost)
-        if i % 50 == 0 and i > 0 == 0:
-            print "%i, cost average: %f" % (i, np.mean(epoch_costs[-50:]))
-        if count % freq_eval == 0:
-            dev_score = evaluate(parameters, f_eval, dev_sentences,
-                                 dev_data, id_to_tag, dico_tags)
-            test_score = evaluate(parameters, f_eval, test_sentences,
-                                  test_data, id_to_tag, dico_tags)
-            print "Score on dev: %.5f" % dev_score
-            print "Score on test: %.5f" % test_score
-            if dev_score > best_dev:
-                best_dev = dev_score
-                print "New best score on dev."
-                print "Saving model to disk..."
-                model.save()
-            if test_score > best_test:
-                best_test = test_score
-                print "New best score on test."
+        #if i % 50 == 0 and i > 0 == 0: 
+        #    print "%i, cost average: %f" % (i, np.mean(epoch_costs[-50:]))
+    
+    # evaluation
+    dev_score = evaluate(parameters, f_eval, dev_sentences,dev_data, id_to_tag, dico_tags)
+    test_score = evaluate(parameters, f_eval, test_sentences, test_data, id_to_tag, dico_tags)
+
+    print "Score on dev: %.5f" % dev_score
+    print "Score on test: %.5f" % test_score
+
+    mean_epoch_cost = np.mean(epoch_costs)
+    train_losses.append(mean_epoch_cost)
+    dev_f1s.append(dev_score)
+    
+    if dev_score > best_dev:
+        best_dev = dev_score
+        patience_counter = 0
+        print "New best score on dev."
+        print "Saving model to disk..."
+        model.save()
+    else:
+        patience_counter +=1
+        if patience_counter >= patience:
+            print "Early stopping at epoch %d" % (epoch+1)
+            break
+    if test_score > best_test:
+        best_test = test_score
+        print "New best score on test."
+
     print "Epoch %i done. Average cost: %f" % (epoch, np.mean(epoch_costs))
+
+print "Training losses per epoch:"
+print train_losses
+
+print "Development F1 scores per epoch:"
+print dev_f1s
